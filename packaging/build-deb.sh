@@ -30,8 +30,19 @@ mkdir -p "$PKG/DEBIAN"
 cmake --install "$BUILD" --prefix "$PKG/usr"
 install -Dm644 "$ROOT/packaging/aetherui.desktop" \
         "$PKG/usr/share/applications/aetherui.desktop"
-install -Dm644 "$ROOT/assets/icons/sparkle.svg" \
+# 应用图标是独立配色的品牌图标；内置的 Fluent 图标（如 sparkle.svg）是 #212121 单色，
+# 直接拿来当桌面图标在任务栏 / 开始菜单里会是黑的。
+install -Dm644 "$ROOT/packaging/aetherui.svg" \
         "$PKG/usr/share/icons/hicolor/scalable/apps/aetherui.svg"
+# 任务栏 / 启动器按实际像素尺寸取图标，位图版能让小尺寸更锐利（没有 rsvg-convert 就只用 SVG）。
+if command -v rsvg-convert >/dev/null 2>&1; then
+    for size in 16 24 32 48 64 128 256; do
+        install -d "$PKG/usr/share/icons/hicolor/${size}x${size}/apps"
+        rsvg-convert -w "$size" -h "$size" \
+            "$ROOT/packaging/aetherui.svg" \
+            -o "$PKG/usr/share/icons/hicolor/${size}x${size}/apps/aetherui.png"
+    done
+fi
 
 echo "==> 推导运行时依赖"
 DEPS_DIR=$BUILD/shlibdeps
@@ -59,6 +70,20 @@ Description: Fluent 风格 C++ 控件库演示
 EOF
 
 echo "==> 生成 deb"
+# 装完刷新图标缓存与桌面数据库，否则 DDE 会继续用旧图标（黑色的那个）。
+cat > "$PKG/DEBIAN/postinst" <<'EOF'
+#!/bin/sh
+set -e
+if [ -x "$(command -v gtk-update-icon-cache)" ]; then
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+fi
+if [ -x "$(command -v update-desktop-database)" ]; then
+    update-desktop-database -q /usr/share/applications || true
+fi
+exit 0
+EOF
+chmod 755 "$PKG/DEBIAN/postinst"
+
 rm -f "$BUILD/aetherui_${VERSION}_${ARCH}.deb"
 dpkg-deb --build --root-owner-group "$PKG" "$BUILD/aetherui_${VERSION}_${ARCH}.deb"
 ls -lh "$BUILD"/*.deb

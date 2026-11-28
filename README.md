@@ -131,7 +131,8 @@ sudo apt install ./build-deb/aetherui_0.1.0_amd64.deb
 ```
 
 安装后的布局：`/usr/bin/aetherui`、`/usr/share/aetherui/assets/{fonts,icons}`、
-`/usr/share/applications/aetherui.desktop`、`/usr/share/icons/hicolor/scalable/apps/aetherui.svg`。
+`/usr/share/applications/aetherui.desktop`、`/usr/share/icons/hicolor/scalable/apps/aetherui.svg`
+（有 `rsvg-convert` 时还会生成 16/24/32/48/64/128/256 的 PNG）。
 运行时依赖由 `dpkg-shlibdeps` 扫 ELF 自动推导，字体与图标路径通过
 `-DAETHERUI_FONT_DIR` / `-DAETHERUI_ASSET_DIR` 编译期写死为安装路径。
 
