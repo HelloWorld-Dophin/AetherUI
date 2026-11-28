@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 
 #include "gfx/surface.h"
 #include "ui/icons.h"
@@ -30,6 +31,27 @@ bool is_brand_name(const std::string& value) {
     return upper == "AETHERUI" || upper == "AETHER" || upper == "BRAND";
 }
 
+/// packaging/aetherui.svg 的竖向渐变：#57C8FF → #1E7FD6 → #0B57B8。
+Color brand_gradient(float t) {
+    const Color stops[3] = {
+        Color{0.341f, 0.784f, 1.000f, 1.0f},
+        Color{0.118f, 0.498f, 0.839f, 1.0f},
+        Color{0.043f, 0.341f, 0.722f, 1.0f},
+    };
+    const float positions[3] = {0.0f, 0.55f, 1.0f};
+    t = std::clamp(t, 0.0f, 1.0f);
+    for (int i = 0; i < 2; ++i) {
+        if (t <= positions[i + 1]) {
+            const float span = positions[i + 1] - positions[i];
+            const float k = span <= 0.0f ? 0.0f : (t - positions[i]) / span;
+            return Color{stops[i].r + (stops[i + 1].r - stops[i].r) * k,
+                         stops[i].g + (stops[i + 1].g - stops[i].g) * k,
+                         stops[i].b + (stops[i + 1].b - stops[i].b) * k, 1.0f};
+        }
+    }
+    return stops[2];
+}
+
 }  // namespace
 
 AppIcon::AppIcon(const std::string& source) : source_(source) { load(); }
@@ -55,15 +77,36 @@ bool AppIcon::load() {
 
 void AppIcon::paint_brand(Painter& painter, float x, float y, float px, Color color,
                           bool dark) const {
-    // 与 packaging/aetherui.svg 同一构图：圆角方块 + 白色星芒。
-    painter.fill_round_rect(Rect{x, y, px, px}, px * 0.22f, color);
+    (void)color;  // 品牌色固定，不跟主题走
+    (void)dark;
+    if (px <= 0.0f) {
+        return;
+    }
+    // 与 packaging/aetherui.svg 同一构图：渐变圆角方块 + 白色星芒。
+    // Painter 没有渐变填充，用横向色带逐条裁剪模拟竖向渐变。
+    const Rect tile{x, y, px, px};
+    const float radius = px * 0.22f;
+    const Recti saved = painter.clip();
+    const int bands = std::max(6, static_cast<int>(px * 0.5f));
+    const float band_h = px / static_cast<float>(bands);
+    for (int i = 0; i < bands; ++i) {
+        const float top = y + static_cast<float>(i) * band_h;
+        const Recti band{static_cast<int>(std::floor(x)), static_cast<int>(std::floor(top)),
+                         static_cast<int>(std::ceil(px)),
+                         static_cast<int>(std::ceil(band_h)) + 1};
+        painter.set_clip(intersect(saved, band));
+        painter.fill_round_rect(
+            tile, radius,
+            brand_gradient((static_cast<float>(i) + 0.5f) / static_cast<float>(bands)));
+    }
+    painter.set_clip(saved);
     if (builtin_ < 0) {
         return;
     }
     const float glyph = px * 0.62f;
     const float inset = (px - glyph) * 0.5f;
     icons::draw(painter, builtin_, x + inset, y + inset, glyph,
-                Color{1.0f, 1.0f, 1.0f, 1.0f}, 1.0f, icons::variant_for(dark));
+                Color{1.0f, 1.0f, 1.0f, 1.0f}, 1.0f, icons::Variant::Regular);
 }
 
 void AppIcon::draw(Painter& painter, float x, float y, float size, float scale, Color color,
