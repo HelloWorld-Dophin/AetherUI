@@ -64,6 +64,7 @@ Theme Theme::light() {
     t.control_stroke_disabled = color_rgba8(0x00, 0x00, 0x00, 0.03f);
     t.neutral_stroke_subtle = color_rgba8(0x00, 0x00, 0x00, 0.03f);
     t.card_stroke_default = color_rgba8(0x00, 0x00, 0x00, 0.059f);
+    t.window_stroke = color_rgba8(0x00, 0x00, 0x00, 0.09f);
 
     t.card_background = color_rgba8(0xFF, 0xFF, 0xFF, 0.70f);
     t.card_background_secondary = color_rgba8(0xF6, 0xF6, 0xF6, 0.50f);
@@ -141,6 +142,7 @@ Theme Theme::dark_theme() {
     t.control_stroke_disabled = color_rgba8(0xFF, 0xFF, 0xFF, 0.03f);
     t.neutral_stroke_subtle = color_rgba8(0xFF, 0xFF, 0xFF, 0.035f);
     t.card_stroke_default = color_rgba8(0x00, 0x00, 0x00, 0.098f);
+    t.window_stroke = color_rgba8(0xFF, 0xFF, 0xFF, 0.10f);
 
     t.card_background = color_rgba8(0xFF, 0xFF, 0xFF, 0.051f);
     t.card_background_secondary = color_rgba8(0xFF, 0xFF, 0xFF, 0.031f);

@@ -3,13 +3,14 @@
 
 #pragma once
 
+#include <functional>
 #include <string>
 
 #include "ui/widget.h"
 
 namespace aether {
 
-struct Button {
+struct Button : Widget {
     std::string label;
     /// 图标下标（icons::index_of 的结果），-1 表示无图标。
     int icon = -1;
@@ -18,6 +19,8 @@ struct Button {
     bool disabled = false;
     /// 正方形纯图标按钮：宽高取同一值。
     bool compact = false;
+    /// 点击回调（在鼠标抬起且仍命中时触发）。
+    std::function<void()> on_click;
 
     Rect rect;
 
@@ -28,6 +31,9 @@ struct Button {
     void measure(TextRenderer& text, const Theme& theme, float s);
     void place(float x, float y);
     void draw(const Context& ctx) const;
+
+    bool hit_test(float x, float y) const override { return !disabled && rect.contains(x, y); }
+    bool handle_event(const Event& event, const UiContext& ui) override;
 };
 
 }  // namespace aether

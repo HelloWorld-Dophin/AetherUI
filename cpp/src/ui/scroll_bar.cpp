@@ -74,6 +74,36 @@ void ScrollBar::release(double now, const Theme& theme) {
 
 void ScrollBar::wheel(float delta) { apply(value - static_cast<double>(delta)); }
 
+bool ScrollBar::handle_event(const Event& event, const UiContext& ui) {
+    switch (event.type) {
+        case Event::Type::MouseMove: {
+            const bool inside = rect.contains(event.x, event.y);
+            if (inside != hovered) {
+                hovered = inside;
+                hover.retarget(inside ? 1.0f : 0.0f, ui.now, ui.theme.motion_fast, ui.theme.easing);
+            }
+            if (dragging) {
+                drag_to(event.y - rect.y);
+            }
+            return false;
+        }
+        case Event::Type::MouseDown:
+            if (event.key != 1 || !rect.contains(event.x, event.y)) {
+                return false;
+            }
+            press_at(event.y - rect.y, ui.now, ui.theme);
+            return true;
+        case Event::Type::MouseUp:
+            if (event.key != 1 || !dragging) {
+                return false;
+            }
+            release(ui.now, ui.theme);
+            return true;
+        default:
+            return false;
+    }
+}
+
 bool ScrollBar::animating(double now) const {
     return hover.running(now, 0.15f) || press.running(now, 0.15f);
 }

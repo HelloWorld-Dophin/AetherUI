@@ -4,6 +4,42 @@
 
 namespace aether {
 
+const TypeStyle& type_style(const Theme& theme, TextStyle style) {
+    switch (style) {
+        case TextStyle::Caption:
+            return theme.caption;
+        case TextStyle::Body:
+            return theme.body;
+        case TextStyle::BodyStrong:
+            return theme.body_strong;
+        case TextStyle::BodyLarge:
+            return theme.body_large;
+        case TextStyle::Subtitle:
+            return theme.subtitle;
+        case TextStyle::Title:
+            return theme.title;
+        case TextStyle::TitleLarge:
+            return theme.title_large;
+    }
+    return theme.body;
+}
+
+Color role_color(const Theme& theme, TextRole role) {
+    switch (role) {
+        case TextRole::Primary:
+            return theme.text_primary;
+        case TextRole::Secondary:
+            return theme.text_secondary;
+        case TextRole::Tertiary:
+            return theme.text_tertiary;
+        case TextRole::Accent:
+            return theme.accent_fill_default;
+        case TextRole::Disabled:
+            return theme.text_disabled;
+    }
+    return theme.text_primary;
+}
+
 Anim Anim::at(float value) {
     Anim anim;
     anim.from = value;

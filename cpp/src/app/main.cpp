@@ -3,27 +3,24 @@
 //! 全部界面由自写光栅绘制：SDL3 只负责窗口与输入，表面即最终像素。
 //! `--shot <path.ppm> [light|dark] [page]` 为离屏截图模式，用于核对像素。
 
-#include <algorithm>
-#include <cmath>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
 
 #include <SDL3/SDL.h>
 
+#include "app/app.h"
 #include "app/gallery.h"
 #include "gfx/surface.h"
-#include "platform/window.h"
 #include "text/font.h"
 
 namespace {
 
-double now_seconds() {
-    static const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
-    return static_cast<double>(SDL_GetPerformanceCounter()) / freq;
-}
+/// 演示窗口的标题与图标：标题栏自绘 logo、任务栏图标都从这两项派生。
+/// 图标可填内置 Fluent 图标名（"SPARKLE"），也可填 SVG（"sparkle.svg"）。
+constexpr const char* kAppTitle = "AetherUI Gallery";
+constexpr const char* kAppIcon = "SPARKLE";
 
 std::vector<std::string> font_search_dirs() {
     std::vector<std::string> dirs;
@@ -126,14 +123,13 @@ int main(int argc, char** argv) {
         const bool light = argc >= 4 && std::strcmp(argv[3], "light") == 0;
         const aether::Page page = argc >= 5 ? page_from_name(argv[4]) : aether::Page::Home;
 
-        aether::Gallery gallery(text);
+        aether::Gallery gallery(text, kAppTitle, aether::App::resolve_icon(kAppIcon));
         gallery.set_theme_mode(!light);
         gallery.set_viewport(static_cast<float>(kWidth), static_cast<float>(kHeight), 1.0f);
         gallery.set_page(page, 0.0);
         if (argc >= 6) {
             gallery.debug_open(argv[5], 0.0);
         }
-        gallery.tick(0.0);
 
         std::vector<uint32_t> pixels(static_cast<size_t>(kWidth) * kHeight, 0);
         aether::Surface surface(pixels.data(), kWidth, kHeight, kWidth);
@@ -146,54 +142,29 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    aether::Window window;
-    if (!window.create("AetherUI Gallery", 1120, 720)) {
+    // 窗口、主循环与 60fps 节流都由 App 负责，这里只挂上界面回调。
+    aether::App app;
+    if (!app.create(kAppTitle, kAppIcon, 1120, 720)) {
         std::fprintf(stderr, "window creation failed: %s\n", SDL_GetError());
         return 1;
     }
+    // 与 Win11 / Fluent 窗口一致的 8px 圆角，平台差异全在窗口控件内部处理。
+    app.window().set_corner_radius(8.0f);
 
-    aether::Gallery gallery(text);
-    gallery.set_theme_mode(true);
+    // 标题与图标只从 App 取，标题栏自绘 logo 与任务栏图标同源。
+    aether::Gallery gallery(text, app.title(), app.icon());
+    // 启动时跟随系统深浅（窗口控件已按平台探测：Windows 个性化 / Linux portal）。
+    gallery.set_theme_mode(app.window().system_dark());
 
-    const double frame_target = 1.0 / 60.0;
-    double clock = 0.0;
-    double last_frame = now_seconds();
-
-    bool running = true;
-    while (running) {
-        const double frame_begin = now_seconds();
-        const double dt = std::clamp(frame_begin - last_frame, 0.0, 0.1);
-        last_frame = frame_begin;
-        clock += dt;
-
-        aether::Event event;
-        while (window.poll(event)) {
-            if (event.type == aether::Event::Type::Quit) {
-                running = false;
-                break;
-            }
-            gallery.handle_event(event, window, clock);
-        }
-        if (!running) {
-            break;
-        }
-
-        gallery.tick(clock);
-
-        aether::Surface surface = window.begin_frame();
-        if (!surface.valid()) {
-            SDL_Delay(4);
-            continue;
-        }
+    app.on_event = [&gallery](const aether::Event& event, aether::Window& window, double now) {
+        gallery.handle_event(event, window, now);
+    };
+    app.on_draw = [&gallery](aether::Surface& surface, aether::Window& window, double now) {
         gallery.set_viewport(static_cast<float>(surface.width()),
                              static_cast<float>(surface.height()), window.pixel_scale());
-        gallery.draw(surface, clock);
-        window.end_frame();
-
-        const double spent = now_seconds() - frame_begin;
-        if (spent < frame_target) {
-            SDL_Delay(static_cast<uint32_t>((frame_target - spent) * 1000.0));
-        }
-    }
-    return 0;
+        gallery.draw(surface, now);
+        // 窗口外沿边框跟随主题：颜色由界面层给，绘制与裁剪由窗口控件完成。
+        window.set_border_color(gallery.window_border_color());
+    };
+    return app.run();
 }

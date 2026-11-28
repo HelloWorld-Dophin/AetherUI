@@ -10,41 +10,15 @@
 
 #include "gfx/geometry.h"
 #include "gfx/surface.h"
+#include "platform/distro.h"
+#include "platform/paths.h"
+#include "ui/input.h"
 
 struct SDL_Window;
 struct SDL_Surface;
 struct SDL_Cursor;
 
 namespace aether {
-
-struct Event {
-    enum class Type {
-        None,
-        Quit,
-        Resize,
-        MouseMove,
-        MouseDown,
-        MouseUp,
-        Wheel,
-        KeyDown,
-        Text,
-        /// 输入法组字过程中的实时串（为空表示组字结束）。
-        Editing
-    };
-
-    Type type = Type::None;
-    /// 鼠标位置，已换算成像素坐标。
-    float x = 0.0f;
-    float y = 0.0f;
-    /// 滚轮增量（像素，正数向上）。
-    float wheel = 0.0f;
-    int width = 0;
-    int height = 0;
-    int key = 0;
-    /// 修饰键状态（SDL_KMOD_* 位组合：Ctrl / Shift / Alt）。
-    int mods = 0;
-    std::string text;
-};
 
 class Window {
 public:
@@ -81,8 +55,27 @@ public:
     /// 没有输入框聚焦时清空候选窗锚点。
     void clear_text_input_area();
 
+    /// 窗口圆角半径（逻辑点，内部按 DPI 换算）。0 表示直角；最大化时自动按 0 处理。
+    void set_corner_radius(float radius);
+
+    /// 窗口外沿 1px 边框颜色（由界面层按主题传入，alpha 为 0 表示不画）。
+    void set_border_color(Color color);
+
+    /// 系统当前是否为深色（Windows 读个性化设置、Linux 读 portal，均由 SDL 处理）。
+    /// 无法判定时按浅色处理。
+    bool system_dark();
+
+    /// 发行版（启动时探测并写入缓存），deepin 后续用于取 DDE 主题色。
+    Distro distro() const { return distro_; }
+
+    /// 设置任务栏 / Alt-Tab 图标（`argb` 为 `0xAARRGGBB` 直通 alpha，行优先）。
+    void set_icon(const uint32_t* argb, int width, int height);
+
 private:
     enum EdgeFlags { kEdgeLeft = 1, kEdgeRight = 2, kEdgeTop = 4, kEdgeBottom = 8 };
+
+    /// 圆角的上屏方式：Windows 用层叠窗口保 alpha，X11 用区域裁剪，其余平台窗口表面自带 alpha。
+    enum class Present { Surface, Layered, Shape };
 
     void refresh_scale();
     int edge_at(float x, float y) const;
@@ -91,9 +84,47 @@ private:
     void end_chrome_drag();
     void update_cursor(int edges);
 
+    void init_present();
+    /// 沿窗口外沿描一圈圆角边框（内容画完之后、圆角蒙版之前）。
+    void draw_border(Surface& frame) const;
+    void apply_corner_alpha(Surface& frame, bool has_alpha) const;
+    float corner_radius_px() const;
+    /// X11 专用：把圆角矩形作为窗口可视区域（二值裁剪，硬边）。
+    void refresh_window_shape();
+
+#if defined(_WIN32)
+    bool init_layered_present();
+    void destroy_layered_surface();
+    bool ensure_layered_surface(int width, int height);
+    void present_layered();
+    /// 等当前帧按新尺寸画完后再进入系统拖动（否则拖动中显示的是旧尺寸画面）。
+    void maybe_start_pending_drag();
+    void* hwnd_ = nullptr;
+    void* present_dc_ = nullptr;
+    void* present_bitmap_ = nullptr;
+    void* present_bits_ = nullptr;
+    int present_width_ = 0;
+    int present_height_ = 0;
+    /// 客户端区域在层叠缓冲区中的偏移（无边框可拉伸窗口最大化时四周有 8px 屏外边）。
+    int present_offset_x_ = 0;
+    int present_offset_y_ = 0;
+    int present_client_w_ = 0;
+    int present_client_h_ = 0;
+    bool drag_pending_ = false;
+#endif
+
+    /// 最近一次鼠标位置（物理像素），用于最大化还原时把标题栏摆回鼠标下方。
+    float last_mouse_x_ = 0.0f;
+    float last_mouse_y_ = 0.0f;
+
     SDL_Window* window_ = nullptr;
     SDL_Surface* own_surface_ = nullptr;
     float scale_ = 1.0f;
+    Distro distro_ = Distro::Other;
+    Present present_ = Present::Surface;
+    float corner_radius_ = 0.0f;
+    bool shape_dirty_ = true;
+    Color border_color_{};
 
     bool dragging_ = false;
     bool resizing_ = false;
@@ -109,8 +140,5 @@ private:
     int cursor_index_ = -1;
     SDL_Cursor* cursors_[5] = {};
 };
-
-/// 可执行文件所在目录（以路径分隔符结尾）。
-std::string executable_dir();
 
 }  // namespace aether

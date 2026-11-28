@@ -34,6 +34,8 @@ struct ScrollBar {
     void drag_to(float position);
     void release(double now, const Theme& theme);
     void wheel(float delta);
+    /// 悬停 / 按下 / 拖动 / 抬起（`event.y` 为窗口像素坐标）。
+    bool handle_event(const Event& event, const UiContext& ui);
     bool animating(double now) const;
 
     void draw(const Context& ctx) const;

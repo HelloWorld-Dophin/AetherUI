@@ -1,16 +1,17 @@
-﻿//! 控件公共设施：数值动画、交互状态机、文本绘制助手。
+﻿//! 控件公共设施：控件基类、事件转发、数值动画、交互状态机、文本绘制助手。
 //!
-//! 动画与状态机：
-//! 动画以「起点 / 终点 / 起始时刻」描述，状态机只做命中判定与状态推导，
-//! 颜色一律由调用方从主题 Token 读取。
+//! 所有交互控件都从 `Widget` 派生：自己命中、自己处理事件，应用层只负责
+//! 「摆放 + 转发 + 绘制」。颜色一律从主题 Token 读取。
 
 #pragma once
 
+#include <iterator>
 #include <string>
 
 #include "gfx/geometry.h"
 #include "gfx/painter.h"
 #include "text/font.h"
+#include "ui/input.h"
 #include "ui/theme.h"
 
 namespace aether {
@@ -25,6 +26,69 @@ enum FaceIndex {
     kFaceMono = 5,
     kFaceMonoSemiBold = 6,
 };
+
+/// 主题里的排版等级（字号 / 行高）。
+enum class TextStyle { Caption, Body, BodyStrong, BodyLarge, Subtitle, Title, TitleLarge };
+
+/// 文本颜色角色。
+enum class TextRole { Primary, Secondary, Tertiary, Accent, Disabled };
+
+const TypeStyle& type_style(const Theme& theme, TextStyle style);
+Color role_color(const Theme& theme, TextRole role);
+
+/// 控件基类：命中测试 + 事件处理 + 焦点。
+class Widget {
+public:
+    virtual ~Widget() = default;
+
+    virtual bool hit_test(float x, float y) const {
+        (void)x;
+        (void)y;
+        return false;
+    }
+    /// 处理一条事件；返回 true 表示已消费（不再传给下层控件）。
+    virtual bool handle_event(const Event& event, const UiContext& ui) {
+        (void)event;
+        (void)ui;
+        return false;
+    }
+    /// 是否参与焦点轮转（Tab 键），不可用状态下返回 false。
+    virtual bool focusable() const { return false; }
+    virtual bool has_focus() const { return false; }
+    virtual void set_focus(bool value) { (void)value; }
+    /// 把光标位置上报给输入法，只有文本类控件需要实现。
+    virtual void sync_ime(const UiContext& ui) const { (void)ui; }
+};
+
+/// 指针类事件（键盘 / 文本 / 组字由焦点管理器独占，不参与批量转发）。
+inline bool is_pointer_event(const Event& event) {
+    switch (event.type) {
+        case Event::Type::MouseMove:
+        case Event::Type::MouseDown:
+        case Event::Type::MouseUp:
+        case Event::Type::Wheel:
+            return true;
+        default:
+            return false;
+    }
+}
+
+/// 把事件转发给一组控件：移动事件广播，其余自后向前、首个消费即止。
+template <typename Collection>
+bool forward_events(Collection& widgets, const Event& event, const UiContext& ui) {
+    if (event.type == Event::Type::MouseMove) {
+        for (auto& widget : widgets) {
+            widget.handle_event(event, ui);
+        }
+        return false;
+    }
+    for (auto it = std::rbegin(widgets); it != std::rend(widgets); ++it) {
+        if (it->handle_event(event, ui)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 /// 简单数值动画（167ms、cubic-bezier(0, 0, 0, 1) 为默认观感）。
 struct Anim {

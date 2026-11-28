@@ -149,6 +149,31 @@ bool ToggleSwitch::animating(double now) const {
            hover.running(now, kHoverDuration);
 }
 
+bool ToggleSwitch::handle_event(const Event& event, const UiContext& ui) {
+    switch (event.type) {
+        case Event::Type::MouseMove:
+            update_hover(rect.contains(event.x, event.y) && !disabled, ui.now, ui.theme);
+            if (pressed) {
+                update_drag(event.x, ui.now, ui.theme);
+            }
+            return false;
+        case Event::Type::MouseDown:
+            if (event.key != 1 || !hit_test(event.x, event.y)) {
+                return false;
+            }
+            update_press(event.x, ui.now, ui.theme);
+            return true;
+        case Event::Type::MouseUp:
+            if (event.key != 1 || !pressed) {
+                return false;
+            }
+            update_release(ui.now, ui.theme);
+            return true;
+        default:
+            return false;
+    }
+}
+
 void ToggleSwitch::draw(const Context& ctx) const {
     const Theme& theme = ctx.theme;
     const float s = ctx.s;

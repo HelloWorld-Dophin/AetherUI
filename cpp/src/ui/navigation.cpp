@@ -76,6 +76,48 @@ bool NavigationView::animating(double now, const Theme& theme) const {
            bar.running(now, kBarMoveDuration);
 }
 
+bool NavigationView::handle_event(const Event& event, const UiContext& ui) {
+    switch (event.type) {
+        case Event::Type::MouseMove: {
+            hamburger_hovered = hamburger_at(event.x, event.y);
+            const int hovered = item_at(event.x, event.y, ui.s);
+            for (size_t i = 0; i < items.size(); ++i) {
+                items[i].hovered = hovered == static_cast<int>(i);
+            }
+            for (size_t i = 0; i < footer.size(); ++i) {
+                footer[i].hovered = hovered == static_cast<int>(items.size() + i);
+            }
+            return false;
+        }
+        case Event::Type::MouseDown: {
+            if (event.key != 1 || !rect.contains(event.x, event.y)) {
+                return false;
+            }
+            if (hamburger_at(event.x, event.y)) {
+                press_feedback(ui.now);
+                toggle_expanded(ui.now, ui.theme);
+                return true;
+            }
+            const int index = item_at(event.x, event.y, ui.s);
+            if (index < 0) {
+                return false;
+            }
+            set_selected(index, ui.now, ui.s);
+            if (on_select) {
+                on_select(index);
+            }
+            return true;
+        }
+        case Event::Type::MouseUp:
+            if (event.key == 1) {
+                pointer_up(ui.now);
+            }
+            return false;
+        default:
+            return false;
+    }
+}
+
 void NavigationView::layout(float x, float y, float w, float h, float s) {
     rect = Rect{x, y, w, h};
     hamburger_rect = Rect{x + kListPadding * s, y + (kHeaderHeight * s - 40.0f * s) * 0.5f,

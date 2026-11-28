@@ -43,22 +43,34 @@ endif()
 # --------------------------------------------------------------------- 主程序
 add_executable(aetherui
     src/app/main.cpp
+    src/app/app.cpp
     src/app/gallery.cpp
     src/gfx/surface.cpp
     src/gfx/raster.cpp
     src/gfx/painter.cpp
     src/platform/window.cpp
+    src/platform/distro.cpp
+    src/platform/paths.cpp
+    src/platform/clipboard.cpp
     src/text/font.cpp
     src/ui/theme.cpp
+    src/ui/theme_manager.cpp
     src/ui/widget.cpp
+    src/ui/label.cpp
+    src/ui/card.cpp
+    src/ui/focus.cpp
     src/ui/icons.cpp
     src/ui/icon_data.cpp
+    src/ui/svg.cpp
+    src/ui/app_icon.cpp
     src/ui/button.cpp
+    src/ui/icon_tile.cpp
     src/ui/toggle_switch.cpp
     src/ui/text_box.cpp
     src/ui/dropdown.cpp
     src/ui/navigation.cpp
     src/ui/scroll_bar.cpp
+    src/ui/scroll_view.cpp
     src/ui/title_bar.cpp
 )
 

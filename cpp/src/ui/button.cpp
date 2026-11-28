@@ -68,6 +68,37 @@ void Button::measure(TextRenderer& text, const Theme& theme, float s) {
 
 void Button::place(float x, float y) { rect = Rect{x, y, rect.w, rect.h}; }
 
+bool Button::handle_event(const Event& event, const UiContext& ui) {
+    switch (event.type) {
+        case Event::Type::MouseMove:
+            hovered = hit_test(event.x, event.y);
+            return false;
+        case Event::Type::MouseDown:
+            if (event.key != 1 || !hit_test(event.x, event.y)) {
+                return false;
+            }
+            pressed = true;
+            return true;
+        case Event::Type::MouseUp:
+            if (event.key != 1) {
+                return false;
+            }
+            if (!pressed) {
+                return false;
+            }
+            pressed = false;
+            if (hit_test(event.x, event.y)) {
+                if (on_click) {
+                    on_click();
+                }
+                return true;
+            }
+            return false;
+        default:
+            return false;
+    }
+}
+
 void Button::draw(const Context& ctx) const {
     const Theme& theme = ctx.theme;
     const float s = ctx.s;

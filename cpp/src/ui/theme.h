@@ -77,6 +77,8 @@ struct Theme {
     Color control_stroke_disabled;
     Color neutral_stroke_subtle;
     Color card_stroke_default;
+    /// 窗口最外层 1px 边框（深浅主题各一档，保证在桌面背景上也看得清）。
+    Color window_stroke;
 
     // 背景
     Color card_background;

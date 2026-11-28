@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include <SDL3/SDL.h>
+
+#include "platform/clipboard.h"
 #include "ui/icons.h"
 
 namespace aether {
@@ -13,7 +16,11 @@ constexpr float kPaddingHorizontal = 10.0f;
 constexpr float kUnderlineThickness = 3.0f;
 constexpr float kChromePadding = 4.0f;
 constexpr float kClearPaddingRight = 8.0f;
-constexpr float kRightIconSize = 12.0f;
+/// 输入框可视高度（不含上下 4px 阴影边距）。
+constexpr float kVisibleHeight = 44.0f;
+/// 右侧图标字形边长与悬停方块边长。
+constexpr float kRightIconSize = 16.0f;
+constexpr float kRightIconBox = 28.0f;
 
 bool is_continuation(unsigned char byte) { return (byte & 0xC0) == 0x80; }
 
@@ -85,7 +92,7 @@ bool valid_integer(const std::string& value) {
 
 void TextBox::measure(float s) {
     width = (420.0f + kChromePadding * 2.0f) * s;
-    height = (44.0f + kChromePadding * 2.0f) * s;
+    height = (kVisibleHeight + kChromePadding * 2.0f) * s;
 }
 
 void TextBox::place(float x, float y) { field = Rect{x, y, width, height}; }
@@ -160,11 +167,11 @@ void TextBox::place_caret_at(TextRenderer& text_renderer, float x, float s, floa
 }
 
 Rect TextBox::right_icon_rect(float s) const {
-    const float box_w = (kRightIconSize + 12.0f) * s;
-    const float box_h = (kRightIconSize + 4.0f) * s;
+    // 方块在可视区内垂直居中，图标在方块内居中。
+    const float box = kRightIconBox * s;
     const float visible_top = field.y + kChromePadding * s;
-    return Rect{field.right() - kClearPaddingRight * s - box_w, visible_top + (44.0f * s - box_h) * 0.5f,
-                box_w, box_h};
+    return Rect{field.right() - kClearPaddingRight * s - box,
+                visible_top + (kVisibleHeight * s - box) * 0.5f, box, box};
 }
 
 bool TextBox::accepts(const std::string& value) const {
@@ -372,6 +379,223 @@ void TextBox::clear() {
     coalesce_undo = true;
 }
 
+void TextBox::paste(const std::string& value) {
+    std::string single;
+    for (char byte : value) {
+        if (byte != '\n' && byte != '\r' && byte != '\t') {
+            single += byte;
+        }
+    }
+    insert_text(single);
+}
+
+void TextBox::set_focus(bool value) {
+    if (focused == value) {
+        return;
+    }
+    focused = value;
+    composing = false;
+    if (!focused) {
+        // 失焦后不再保留选区高亮。
+        anchor = caret;
+        pressed = false;
+    }
+}
+
+void TextBox::handle_key(const Event& event) {
+    const bool ctrl = (event.mods & SDL_KMOD_CTRL) != 0;
+    const bool shift = (event.mods & SDL_KMOD_SHIFT) != 0;
+
+    if (ctrl) {
+        switch (event.key) {
+            case SDLK_A:
+                select_all();
+                return;
+            case SDLK_C:
+                set_clipboard_text(selected_text());
+                return;
+            case SDLK_X:
+                set_clipboard_text(cut_selection());
+                return;
+            case SDLK_V:
+                paste(clipboard_text());
+                return;
+            case SDLK_Z:
+                if (shift) {
+                    redo();
+                } else {
+                    undo();
+                }
+                return;
+            case SDLK_Y:
+                redo();
+                return;
+            case SDLK_BACKSPACE:
+                delete_word_backward();
+                return;
+            case SDLK_DELETE:
+                delete_word_forward();
+                return;
+            case SDLK_LEFT:
+                move_word(-1, shift);
+                return;
+            case SDLK_RIGHT:
+                move_word(1, shift);
+                return;
+            case SDLK_HOME:
+                move_to_edge(false, shift);
+                return;
+            case SDLK_END:
+                move_to_edge(true, shift);
+                return;
+            default:
+                return;
+        }
+    }
+
+    switch (event.key) {
+        case SDLK_BACKSPACE:
+            backspace();
+            break;
+        case SDLK_DELETE:
+            erase_forward();
+            break;
+        case SDLK_LEFT:
+            if (shift) {
+                move_caret_extend(-1);
+            } else {
+                move_caret(-1);
+            }
+            break;
+        case SDLK_RIGHT:
+            if (shift) {
+                move_caret_extend(1);
+            } else {
+                move_caret(1);
+            }
+            break;
+        case SDLK_HOME:
+            move_to_edge(false, shift);
+            break;
+        case SDLK_END:
+            move_to_edge(true, shift);
+            break;
+        default:
+            break;
+    }
+}
+
+bool TextBox::handle_event(const Event& event, const UiContext& ui) {
+    const float s = ui.s;
+    const float font_size = ui.theme.body.size * s;
+
+    switch (event.type) {
+        case Event::Type::MouseMove: {
+            if (disabled) {
+                hovered = false;
+                right_hovered = false;
+                return false;
+            }
+            hovered = field.contains(event.x, event.y);
+            const bool icon_shown =
+                right_icon >= 0 && (right_icon_custom || (focused && !text.empty()));
+            right_hovered = icon_shown && right_icon_rect(s).contains(event.x, event.y);
+            if (pressed && focused) {
+                // 拖拽选区：按住左键时只移动活动端。
+                caret = index_at_x(ui.text, event.x, s, font_size);
+                return true;
+            }
+            return false;
+        }
+        case Event::Type::MouseDown: {
+            if (event.key != 1 || !field.contains(event.x, event.y)) {
+                pressed = false;
+                return false;
+            }
+            if (disabled) {
+                return true;
+            }
+            const bool icon_shown =
+                right_icon >= 0 && (right_icon_custom || (focused && !text.empty()));
+            if (icon_shown && right_icon_rect(s).contains(event.x, event.y)) {
+                if (right_icon_custom) {
+                    ++right_clicks;
+                } else {
+                    clear();
+                }
+                return true;
+            }
+            const bool double_click = last_click >= 0.0 && ui.now - last_click < 0.4;
+            if (double_click) {
+                select_all();
+            } else {
+                place_caret_at(ui.text, event.x, s, font_size);
+            }
+            last_click = ui.now;
+            pressed = true;
+            return true;
+        }
+        case Event::Type::MouseUp:
+            if (event.key == 1 && pressed) {
+                pressed = false;
+                return true;
+            }
+            return false;
+        case Event::Type::KeyDown:
+            if (!focused) {
+                return false;
+            }
+            if (composing) {
+                // 组字期间的按键属于输入法，界面层不重复处理。
+                return true;
+            }
+            handle_key(event);
+            return true;
+        case Event::Type::Text:
+            if (!focused) {
+                return false;
+            }
+            composing = false;  // 上屏即组字结束
+            insert_text(event.text);
+            return true;
+        case Event::Type::Editing:
+            if (!focused) {
+                return false;
+            }
+            composing = !event.text.empty();
+            if (!composing) {
+                sync_ime(ui);
+            }
+            return true;
+        default:
+            return false;
+    }
+}
+
+void TextBox::sync_ime(const UiContext& ui) const {
+    if (ui.host == nullptr || !focused || disabled || composing) {
+        return;
+    }
+    const float s = ui.s;
+    const float line_height = ui.theme.body.line_height * s;
+    const float text_x = text_left(s);
+    const float text_y = field.y + kChromePadding * s + kPaddingVertical * s;
+    const size_t caret_index =
+        std::min<size_t>(static_cast<size_t>(std::max(caret, 0)), text.size());
+    const std::string prefix = text.substr(0, caret_index);
+    const float caret_x =
+        text_x + text_width(ui.text, prefix.c_str(), kFaceRegular, ui.theme.body.size * s) - scroll;
+    if (ime_valid && std::fabs(ime_x - caret_x) < 0.5f && std::fabs(ime_y - text_y) < 0.5f &&
+        std::fabs(ime_h - line_height) < 0.5f) {
+        return;
+    }
+    ui.host->set_text_input_area(caret_x, text_y, s, line_height);
+    ime_x = caret_x;
+    ime_y = text_y;
+    ime_h = line_height;
+    ime_valid = true;
+}
+
 void TextBox::draw(const Context& ctx) const {
     const Theme& theme = ctx.theme;
     const float s = ctx.s;
@@ -381,7 +605,7 @@ void TextBox::draw(const Context& ctx) const {
     const bool dark = ctx.dark;
 
     const float radius = theme.radius_text_box * s;
-    const Rect area{field.x, field.y + kChromePadding * s, field.w, 44.0f * s};
+    const Rect area{field.x, field.y + kChromePadding * s, field.w, kVisibleHeight * s};
 
     // ---- 底盘：底边基线阴影（裁剪到底边以下）----
     const float baseline_radius = std::max(radius, 0.0f);

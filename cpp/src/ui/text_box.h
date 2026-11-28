@@ -10,7 +10,7 @@
 
 namespace aether {
 
-struct TextBox {
+struct TextBox : Widget {
     std::string text;
     std::string placeholder;
     bool disabled = false;
@@ -24,6 +24,10 @@ struct TextBox {
     bool focused = false;
     bool pressed = false;
     bool right_hovered = false;
+    /// 输入法正在组字：此时不重设候选窗锚点，按键也交给输入法。
+    bool composing = false;
+    /// 上一次点击的时刻，用于双击全选。
+    double last_click = -1.0;
 
     /// 布局盒（含底盘 4px 阴影边距），可视区域在其中内缩 4px。
     Rect field;
@@ -90,6 +94,26 @@ struct TextBox {
     bool coalesce_undo = false;
 
     void draw(const Context& ctx) const;
+
+    // ---- Widget：命中 / 事件 / 焦点 / 输入法 ----
+    bool hit_test(float x, float y) const override { return field.contains(x, y); }
+    bool focusable() const override { return !disabled; }
+    bool has_focus() const override { return focused; }
+    void set_focus(bool value) override;
+    bool handle_event(const Event& event, const UiContext& ui) override;
+    void sync_ime(const UiContext& ui) const override;
+
+    /// 粘贴：去掉换行与制表符后插入。
+    void paste(const std::string& value);
+
+private:
+    void handle_key(const Event& event);
+
+    /// 上一次上报给输入法的锚点，避免重复调用平台接口。
+    mutable bool ime_valid = false;
+    mutable float ime_x = 0.0f;
+    mutable float ime_y = 0.0f;
+    mutable float ime_h = 0.0f;
 };
 
 }  // namespace aether

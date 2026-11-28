@@ -9,7 +9,7 @@
 
 namespace aether {
 
-struct ToggleSwitch {
+struct ToggleSwitch : Widget {
     std::string label;
     bool on = false;
     bool disabled = false;
@@ -43,6 +43,9 @@ struct ToggleSwitch {
 
     bool animating(double now) const;
     void draw(const Context& ctx) const;
+
+    bool hit_test(float x, float y) const override { return !disabled && rect.contains(x, y); }
+    bool handle_event(const Event& event, const UiContext& ui) override;
 };
 
 }  // namespace aether

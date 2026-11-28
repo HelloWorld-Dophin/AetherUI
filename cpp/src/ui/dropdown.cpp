@@ -124,6 +124,102 @@ float Dropdown::panel_top(float field_top, const Theme& theme, float s) const {
     }
 }
 
+Rect Dropdown::panel_rect(const Theme& theme, float s) const {
+    return Rect{field.x, panel_top(field.y, theme, s), chrome_width(), panel_height(theme, s)};
+}
+
+Rect Dropdown::item_rect(size_t index, const Theme& theme, float s) const {
+    const Rect panel = panel_rect(theme, s);
+    const float row_h = item_height(theme, s);
+    return Rect{panel.x + kPanelPadding * s,
+                panel.y + kPanelPadding * s +
+                    static_cast<float>(index) * (row_h + kItemGap * s),
+                panel.w - kPanelPadding * 2.0f * s, row_h};
+}
+
+int Dropdown::item_at(float x, float y, const Theme& theme, float s) const {
+    for (size_t i = 0; i < items.size(); ++i) {
+        if (items[i].disabled) {
+            continue;
+        }
+        if (item_rect(i, theme, s).contains(x, y)) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+bool Dropdown::handle_event(const Event& event, const UiContext& ui) {
+    if (event.type == Event::Type::MouseMove) {
+        hover_item = open ? item_at(event.x, event.y, ui.theme, ui.s) : -1;
+    }
+    return false;
+}
+
+bool DropdownGroup::handle_event(const Event& event, const UiContext& ui) {
+    if (event.type == Event::Type::MouseMove) {
+        for (Dropdown* dropdown : items_) {
+            dropdown->handle_event(event, ui);
+        }
+        return false;
+    }
+    if (event.type != Event::Type::MouseDown || event.key != 1) {
+        return false;
+    }
+
+    // 后加入的面板在上层，先判面板，再判闭合框。
+    for (auto it = items_.rbegin(); it != items_.rend(); ++it) {
+        Dropdown& dropdown = **it;
+        if (!dropdown.open || !dropdown.panel_rect(ui.theme, ui.s).contains(event.x, event.y)) {
+            continue;
+        }
+        const int index = dropdown.item_at(event.x, event.y, ui.theme, ui.s);
+        if (index >= 0) {
+            dropdown.select(index, ui.now, ui.theme);
+            if (dropdown.on_select) {
+                dropdown.on_select(index);
+            }
+        }
+        return true;
+    }
+    for (auto it = items_.rbegin(); it != items_.rend(); ++it) {
+        Dropdown& dropdown = **it;
+        if (!dropdown.field.contains(event.x, event.y)) {
+            continue;
+        }
+        close_all(ui.now, ui.theme);
+        dropdown.toggle(ui.now, ui.theme);
+        return true;
+    }
+    // 点击面板与闭合框之外：全部收起。
+    close_all(ui.now, ui.theme);
+    return false;
+}
+
+void DropdownGroup::close_all(double now, const Theme& theme) {
+    for (Dropdown* dropdown : items_) {
+        dropdown->close(now, theme);
+    }
+}
+
+void DropdownGroup::draw_panels(const Context& ctx) const {
+    for (const Dropdown* dropdown : items_) {
+        if (!dropdown->panel_visible(ctx.now)) {
+            continue;
+        }
+        dropdown->draw_panel(ctx, dropdown->panel_top(dropdown->field.y, ctx.theme, ctx.s));
+    }
+}
+
+bool DropdownGroup::animating(double now) const {
+    for (const Dropdown* dropdown : items_) {
+        if (dropdown->animating(now)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 const DropdownOption* Dropdown::selected_item() const {
     if (selected < 0 || selected >= static_cast<int>(items.size())) {
         return nullptr;

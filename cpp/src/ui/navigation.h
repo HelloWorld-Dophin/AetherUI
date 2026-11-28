@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -18,10 +19,12 @@ struct NavItem {
     bool selected = false;
 };
 
-struct NavigationView {
+struct NavigationView : Widget {
     std::vector<NavItem> items;
     std::vector<NavItem> footer;
     int selected = 0;
+    /// 选中条目变化（含底部条目，下标连续编号）。
+    std::function<void(int)> on_select;
 
     bool expanded = true;
     Anim width = Anim::at(240.0f);
@@ -58,6 +61,9 @@ struct NavigationView {
     bool hamburger_at(float x, float y) const { return hamburger_rect.contains(x, y); }
 
     void draw(const Context& ctx) const;
+
+    bool hit_test(float x, float y) const override { return rect.contains(x, y); }
+    bool handle_event(const Event& event, const UiContext& ui) override;
 
 private:
     float nav_width(double now, const Theme& theme) const;
