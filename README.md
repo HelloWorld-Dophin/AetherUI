@@ -114,6 +114,27 @@ $cmake = "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\Common7
 参数：`--shot <文件> [light|dark] [home|textbox|button|dropdown|toggle|fonts|icons|about]`，
 可选第 6 个参数强制展开某个面板（`theme` / `d0`~`d3` / `p0`~`p2` / `collapse`）。
 
+### 打包 deb（Linux）
+
+网页上就能出包：仓库 **Actions → build-deb → Run workflow**，版本号留空即 `0.1.0+<短 SHA>`；
+跑完在 job 的 Artifacts 里下载 `aetherui-deb`。推送 `v*` tag 时同一个工作流会把 deb 挂到对应 Release。
+
+工作流内容见 [deb.yml](.github/workflows/deb.yml)：装构建依赖 → 拉取 SDL3 3.2.0 与 FreeType 2.13.3
+（`cpp/third_party` 不入库）→ 编译 → 冒烟测试（`SDL_VIDEODRIVER=offscreen` 离屏渲染一帧）→ 打包。
+
+本机（Ubuntu）也可以直接跑同一个脚本：
+
+```bash
+sudo apt install build-essential cmake ninja-build dpkg-dev
+packaging/build-deb.sh 0.1.0        # 产物：build-deb/aetherui_0.1.0_amd64.deb
+sudo apt install ./build-deb/aetherui_0.1.0_amd64.deb
+```
+
+安装后的布局：`/usr/bin/aetherui`、`/usr/share/aetherui/assets/{fonts,icons}`、
+`/usr/share/applications/aetherui.desktop`、`/usr/share/icons/hicolor/scalable/apps/aetherui.svg`。
+运行时依赖由 `dpkg-shlibdeps` 扫 ELF 自动推导，字体与图标路径通过
+`-DAETHERUI_FONT_DIR` / `-DAETHERUI_ASSET_DIR` 编译期写死为安装路径。
+
 ## 目录结构
 
 ```text
@@ -121,13 +142,15 @@ aetherui/
 ├─ assets/
 │  ├─ fonts/                 # 内嵌字体（更纱黑体 / JetBrains Mono / Noto Symbols / Noto Emoji）
 │  └─ icons/                 # Fluent SVG 图标（常规 + 加粗，共 252 个）
+├─ packaging/                # deb 打包：build-deb.sh + aetherui.desktop
+├─ .github/workflows/        # build-deb（网页 Run workflow 出包，tag 时挂 Release）
 └─ cpp/
    ├─ CMakeLists.txt
    ├─ tools/gen_icons.js     # SVG → src/ui/icon_data.cpp
    └─ src/
       ├─ app/                # app.cpp 主循环与帧节流、main.cpp 入口、gallery.cpp 八个演示页（只做组合与事件转发）
       ├─ gfx/                # surface / raster（扫描线光栅）/ painter
-      ├─ platform/           # SDL3 窗口、输入法锚点、边框拖动与拉伸、系统深浅与发行版探测、剪贴板
+      ├─ platform/           # SDL3 窗口、输入法锚点、边框拖动与拉伸、系统深浅与发行版探测、assets 查找、剪贴板
       ├─ text/               # FreeType 字形图集与断行
       └─ ui/                 # 输入契约 + 主题 + 各控件 + 图标
 ```

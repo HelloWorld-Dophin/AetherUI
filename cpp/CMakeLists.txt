@@ -76,5 +76,18 @@ add_executable(aetherui
 
 target_include_directories(aetherui PRIVATE src)
 target_link_libraries(aetherui PRIVATE ${AETHERUI_SDL_TARGET} freetype)
+
+# 字体与 assets 目录：源码树运行时用默认值，打 deb 时用 -D 覆盖成安装路径。
+set(AETHERUI_FONT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../assets/fonts"
+    CACHE PATH "字体目录（运行时回退路径）")
+set(AETHERUI_ASSET_DIR "${CMAKE_INSTALL_PREFIX}/share/aetherui"
+    CACHE PATH "assets 根目录（运行时回退路径）")
 target_compile_definitions(aetherui PRIVATE
-    AETHERUI_FONT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets/fonts")
+    AETHERUI_FONT_DIR="${AETHERUI_FONT_DIR}"
+    AETHERUI_ASSET_DIR="${AETHERUI_ASSET_DIR}")
+
+# ------------------------------------------------------------------ 安装（打包）
+include(GNUInstallDirs)
+install(TARGETS aetherui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../assets/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/aetherui/assets)

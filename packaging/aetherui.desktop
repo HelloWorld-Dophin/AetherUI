@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=AetherUI
+GenericName=UI Toolkit Demo
+Comment=Fluent 风格 C++ 控件库演示
+Exec=aetherui
+Icon=aetherui
+Terminal=false
+Categories=Development;Graphics;
+Keywords=fluent;ui;gallery;controls;
+StartupWMClass=aetherui

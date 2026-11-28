@@ -1,0 +1,92 @@
+name: build-deb
+
+# 网页上 Actions → build-deb → Run workflow 即可出包；
+# 推 v* tag 时额外把 deb 挂到对应 Release。
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "包版本号（留空 = 0.1.0+提交短 SHA）"
+        required: false
+        type: string
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  SDL3_VERSION: "3.2.0"
+  FREETYPE_VERSION: "2.13.3"
+
+jobs:
+  deb:
+    name: 编译并打包 deb
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build curl ca-certificates dpkg-dev \
+            libx11-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev \
+            libxfixes-dev libxss-dev libwayland-dev libxkbcommon-dev \
+            libdecor-0-dev libasound2-dev libpulse-dev libudev-dev libdbus-1-dev
+
+      - name: 缓存 third_party
+        id: third-party
+        uses: actions/cache@v4
+        with:
+          path: cpp/third_party
+          key: third_party-sdl${{ env.SDL3_VERSION }}-ft${{ env.FREETYPE_VERSION }}
+
+      - name: 获取 SDL3 与 FreeType（third_party 不入库）
+        if: steps.third-party.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/sdl3.tar.gz \
+            "https://github.com/libsdl-org/SDL/releases/download/release-${SDL3_VERSION}/SDL3-${SDL3_VERSION}.tar.gz"
+          mkdir -p cpp/third_party/SDL
+          tar -xzf /tmp/sdl3.tar.gz -C cpp/third_party/SDL --strip-components=1
+
+          FT_TAG="VER-${FREETYPE_VERSION//./-}"
+          curl -fsSL -o /tmp/freetype.tar.gz \
+            "https://github.com/freetype/freetype/archive/refs/tags/${FT_TAG}.tar.gz"
+          mkdir -p cpp/third_party/freetype
+          tar -xzf /tmp/freetype.tar.gz -C cpp/third_party/freetype --strip-components=1
+
+      - name: 编译并打包
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION="0.1.0+$(git rev-parse --short HEAD)"
+          fi
+          chmod +x packaging/build-deb.sh
+          packaging/build-deb.sh "$VERSION"
+
+      - name: 冒烟测试（离屏渲染一帧）
+        run: |
+          set -euo pipefail
+          BIN=$(ls build-deb/stage/*/usr/bin/aetherui)
+          SDL_VIDEODRIVER=offscreen "$BIN" --shot /tmp/smoke.ppm dark icons
+          test -s /tmp/smoke.ppm
+
+      - name: 上传 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aetherui-deb
+          path: build-deb/*.deb
+          if-no-files-found: error
+
+      - name: 推 tag 时挂到 Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build-deb/*.deb
