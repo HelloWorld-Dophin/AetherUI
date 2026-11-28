@@ -85,6 +85,8 @@ private:
     void update_cursor(int edges);
 
     void init_present();
+    /// AETHERUI_LOG=1 时把后端信息打到 stderr，方便排查平台差异。
+    void log_backend() const;
     /// 沿窗口外沿描一圈圆角边框（内容画完之后、圆角蒙版之前）。
     void draw_border(Surface& frame) const;
     void apply_corner_alpha(Surface& frame, bool has_alpha) const;
@@ -122,6 +124,8 @@ private:
     float scale_ = 1.0f;
     Distro distro_ = Distro::Other;
     Present present_ = Present::Surface;
+    /// 没有 alpha 也没有形状裁剪的窗口（X11 用 AETHERUI_X11_NO_ALPHA=1 时）。
+    bool opaque_frame_ = false;
     float corner_radius_ = 0.0f;
     bool shape_dirty_ = true;
     Color border_color_{};

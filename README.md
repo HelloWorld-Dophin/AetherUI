@@ -135,6 +135,17 @@ sudo apt install ./build-deb/aetherui_0.1.0_amd64.deb
 运行时依赖由 `dpkg-shlibdeps` 扫 ELF 自动推导，字体与图标路径通过
 `-DAETHERUI_FONT_DIR` / `-DAETHERUI_ASSET_DIR` 编译期写死为安装路径。
 
+### Linux / X11 排查开关
+
+| 环境变量 | 作用 |
+| --- | --- |
+| `AETHERUI_LOG=1` | 启动时把 `driver / present / opaque / size / scale / distro` 打到 stderr |
+| `AETHERUI_X11_NO_ALPHA=1` | 退回不透明窗口：不发 `SDL_WINDOW_TRANSPARENT`、不做 XShape 裁剪，代价是 X11 上窗口变直角 |
+
+默认会关掉 SDL 的 `SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR` 提示——它会给窗口打
+`_NET_WM_BYPASS_COMPOSITOR`，DDE（deepin 25 X11）会因此把任务栏与桌面从合成层里摘掉，
+表现为「程序运行时任务栏和桌面消失」。
+
 ## 目录结构
 
 ```text

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include <SDL3/SDL.h>
@@ -22,6 +23,12 @@ constexpr int kMinHeight = 360;
 
 bool format_is_direct(SDL_PixelFormat format) {
     return format == SDL_PIXELFORMAT_ARGB8888 || format == SDL_PIXELFORMAT_XRGB8888;
+}
+
+/// 环境变量开关：未设、"0"、空串都算关闭。
+bool env_enabled(const char* name) {
+    const char* value = SDL_getenv(name);
+    return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
 
 int cursor_index_for_edges(int edges) {
@@ -99,6 +106,11 @@ Window::Window() = default;
 Window::~Window() { destroy(); }
 
 bool Window::create(const char* title, int width, int height) {
+#if !defined(_WIN32)
+    // X11 下 SDL 默认给窗口打 _NET_WM_BYPASS_COMPOSITOR，合成器会把窗口直接上屏；
+    // DDE（deepin 25）会因此把任务栏与桌面从合成层里摘掉，表现为「桌面消失」。
+    SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
+#endif
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         return false;
     }
@@ -107,7 +119,12 @@ bool Window::create(const char* title, int width, int height) {
 #if !defined(_WIN32)
     // 圆角靠窗口表面自带的 alpha 与合成器混合；X11 还要求该标志才能做区域裁剪。
     // Windows 走层叠窗口逐像素上屏，不需要（也不适合）该标志。
-    flags |= SDL_WINDOW_TRANSPARENT;
+    // 个别 X11 合成器不支持 ARGB 视觉，可用 AETHERUI_X11_NO_ALPHA=1 退回不透明窗口
+    // （代价是 X11 上的窗口圆角变成直角）。
+    opaque_frame_ = env_enabled("AETHERUI_X11_NO_ALPHA");
+    if (!opaque_frame_) {
+        flags |= SDL_WINDOW_TRANSPARENT;
+    }
 #endif
     window_ = SDL_CreateWindow(title, width, height, flags);
     if (window_ == nullptr) {
@@ -119,6 +136,7 @@ bool Window::create(const char* title, int width, int height) {
     // 发行版只探测一次（优先读缓存），界面层直接查询即可。
     distro_ = detect_distro();
     init_present();
+    log_backend();
     return true;
 }
 
@@ -319,8 +337,8 @@ void Window::draw_border(Surface& frame) const {
 }
 
 float Window::corner_radius_px() const {
-    if (maximized()) {
-        return 0.0f;  // 最大化/全屏时贴着屏幕边，不该有圆角
+    if (maximized() || opaque_frame_) {
+        return 0.0f;  // 最大化/全屏贴边；不透明窗口没有 alpha 与形状，圆角只能留直角
     }
     return corner_radius_ * scale_;
 }
@@ -356,12 +374,39 @@ void Window::init_present() {
 #endif
     const char* driver = SDL_GetCurrentVideoDriver();
     // X11 的软件表面是 24 位、没有 alpha，只能靠 XShape 区域裁剪（硬边）。
+    // 用 AETHERUI_X11_NO_ALPHA=1 启动时窗口是不透明的，也就不需要形状裁剪。
     if (driver != nullptr && std::strcmp(driver, "x11") == 0) {
-        present_ = Present::Shape;
+        present_ = opaque_frame_ ? Present::Surface : Present::Shape;
         return;
     }
     // Wayland / macOS 的窗口表面本身带 alpha，直接写像素即可。
     present_ = Present::Surface;
+}
+
+void Window::log_backend() const {
+    if (window_ == nullptr || !env_enabled("AETHERUI_LOG")) {
+        return;
+    }
+    const char* driver = SDL_GetCurrentVideoDriver();
+    const char* present = "surface";
+    switch (present_) {
+        case Present::Layered:
+            present = "layered";
+            break;
+        case Present::Shape:
+            present = "shape";
+            break;
+        case Present::Surface:
+            present = "surface";
+            break;
+    }
+    int w = 0;
+    int h = 0;
+    SDL_GetWindowSize(window_, &w, &h);
+    std::fprintf(stderr,
+                 "[aetherui] driver=%s present=%s opaque=%d size=%dx%d scale=%.2f distro=%d\n",
+                 driver != nullptr ? driver : "?", present, opaque_frame_ ? 1 : 0, w, h,
+                 static_cast<double>(scale_), static_cast<int>(distro_));
 }
 
 void Window::refresh_window_shape() {
