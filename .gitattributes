@@ -1,0 +1,19 @@
+# 统一换行：仓库与工作区都用 LF，避免 Windows 检出把源码改成 CRLF。
+# 源码带 UTF-8 BOM，MSVC 需要，因此不关闭 BOM 也不做编码转换。
+* text=auto eol=lf
+
+*.cpp text eol=lf
+*.h text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+*.svg text eol=lf
+*.json text eol=lf
+*.js text eol=lf
+
+*.ttf binary
+*.otf binary
+*.png binary
+*.jpg binary
+*.ppm binary

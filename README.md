@@ -65,7 +65,7 @@
 |---|---|
 | 控件 | Slider、ProgressBar、Flyout、ToolTip、ContentDialog、Menu、TabView、InfoBar、ListView |
 | 文本 | 多行编辑、富文本、HarfBuzz 复杂整形（阿拉伯文 / 印度文）、右键菜单 |
-| 窗口 | 真实 Mica / Acrylic 模糊、窗口圆角、多显示器 DPI 热变更 |
+| 窗口 | 真实 Mica / Acrylic 模糊、多显示器 DPI 热变更 |
 | 输入 | 悬停光标形状（I 型 / 手型）、触摸与笔、拖放文件 |
 
 ## 渲染方案
