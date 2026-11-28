@@ -1,0 +1,4 @@
+/cpp/build
+/cpp/third_party
+/.trae
+*.ppm
