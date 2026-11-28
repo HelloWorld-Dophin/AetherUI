@@ -20,15 +20,31 @@ bool ends_with_svg(const std::string& value) {
     return tail == ".svg";
 }
 
+/// 品牌图标的内置名（不区分大小写）。
+bool is_brand_name(const std::string& value) {
+    std::string upper;
+    upper.reserve(value.size());
+    for (char c : value) {
+        upper += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    }
+    return upper == "AETHERUI" || upper == "AETHER" || upper == "BRAND";
+}
+
 }  // namespace
 
 AppIcon::AppIcon(const std::string& source) : source_(source) { load(); }
 
 bool AppIcon::load() {
     builtin_ = -1;
+    brand_ = false;
     svg_.clear();
     if (source_.empty()) {
         return false;
+    }
+    if (is_brand_name(source_)) {
+        brand_ = true;
+        builtin_ = icons::index_of("SPARKLE");
+        return true;
     }
     if (ends_with_svg(source_)) {
         return svg::Image::load(source_.c_str(), svg_);
@@ -37,9 +53,26 @@ bool AppIcon::load() {
     return builtin_ >= 0;
 }
 
+void AppIcon::paint_brand(Painter& painter, float x, float y, float px, Color color,
+                          bool dark) const {
+    // 与 packaging/aetherui.svg 同一构图：圆角方块 + 白色星芒。
+    painter.fill_round_rect(Rect{x, y, px, px}, px * 0.22f, color);
+    if (builtin_ < 0) {
+        return;
+    }
+    const float glyph = px * 0.62f;
+    const float inset = (px - glyph) * 0.5f;
+    icons::draw(painter, builtin_, x + inset, y + inset, glyph,
+                Color{1.0f, 1.0f, 1.0f, 1.0f}, 1.0f, icons::variant_for(dark));
+}
+
 void AppIcon::draw(Painter& painter, float x, float y, float size, float scale, Color color,
                    bool dark) const {
     if (size <= 0.0f || color.a <= 0.0f) {
+        return;
+    }
+    if (brand_) {
+        paint_brand(painter, x, y, size * scale, color, dark);
         return;
     }
     if (builtin_ >= 0) {
@@ -63,7 +96,9 @@ bool AppIcon::rasterize(int px, Color color, std::vector<uint32_t>& out) const {
     Surface surface(pixels.data(), px, px, px);
     Painter painter(surface);
 
-    if (builtin_ >= 0) {
+    if (brand_) {
+        paint_brand(painter, 0.0f, 0.0f, size, color, true);
+    } else if (builtin_ >= 0) {
         icons::draw(painter, builtin_, 0.0f, 0.0f, size, color, 1.0f, icons::Variant::Regular);
     } else {
         Path path;

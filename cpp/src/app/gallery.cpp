@@ -321,6 +321,9 @@ void Gallery::set_page(Page page, double now) {
     nav_.set_selected(static_cast<int>(page), now, scale_);
     close_panels(now);
     focus_.clear();
+    // 换页从顶部开始看。
+    page_scroll_.bar.set_value(0.0);
+    page_content_h_ = 0.0f;
 }
 
 void Gallery::toggle_theme(double now) {
@@ -387,8 +390,18 @@ void Gallery::layout(double now) {
     title_bar_.layout(0.0f, 0.0f, width_, s);
     nav_.layout(0.0f, title_bar_.bar.h, nav_w, height_ - title_bar_.bar.h, s);
 
+    const float view_top = title_bar_.bar.h;
+    const float view_h = std::max(height_ - view_top, 0.0f);
+    // 图标页自带视口，其余页面共用内容区滚动条。
+    const bool page_scrolls = page_ != Page::Icons;
+    if (page_scrolls) {
+        page_scroll_.layout(nav_w, view_top, std::max(width_ - nav_w, 0.0f), view_h,
+                            page_content_h_, s);
+    }
+    const float scroll_offset = page_scrolls ? page_scroll_.offset() : 0.0f;
+
     page_x_ = nav_w + kContentPadding * s;
-    page_y_ = title_bar_.bar.h + kContentPadding * s;
+    page_y_ = view_top + kContentPadding * s - scroll_offset;
     content_w_ = std::max(width_ - nav_w - kContentPadding * 2.0f * s, 0.0f);
 
     // 右上角主题下拉框贴内容区右上角。
@@ -404,31 +417,40 @@ void Gallery::layout(double now) {
     header_.set(page_title(), page_caption());    header_.layout(text_, theme, s, page_x_, page_y_, content_w_);
     const float top = header_.bottom() + kSectionGap * s;
 
+    float content_bottom = top;
     switch (page_) {
         case Page::Home:
-            layout_home(top, s);
+            content_bottom = layout_home(top, s);
             break;
         case Page::TextBox:
-            layout_text_box(top, s);
+            content_bottom = layout_text_box(top, s);
             break;
         case Page::Button:
-            layout_button(top, s);
+            content_bottom = layout_button(top, s);
             break;
         case Page::Dropdown:
-            layout_dropdown(top, s);
+            content_bottom = layout_dropdown(top, s);
             break;
         case Page::Toggle:
-            layout_toggle(top, s);
+            content_bottom = layout_toggle(top, s);
             break;
         case Page::Fonts:
-            layout_fonts(top, s);
+            content_bottom = layout_fonts(top, s);
             break;
         case Page::Icons:
-            layout_icons(top, s);
+            content_bottom = layout_icons(top, s);
             break;
         case Page::About:
-            layout_about(top, s);
+            content_bottom = layout_about(top, s);
             break;
+    }
+
+    if (page_scrolls) {
+        // 内容高度换算回未滚动的坐标系，下一帧用来夹紧滚动位置。
+        page_content_h_ = std::max(
+            content_bottom + scroll_offset + kContentPadding * s - view_top, view_h);
+    } else {
+        page_scroll_.bar.set_value(0.0);
     }
 
     // 参与事件的下拉面板只包含当前页可见的那几个。
@@ -444,7 +466,7 @@ void Gallery::layout(double now) {
     dropdowns_group_.add(theme_dropdown_);
 }
 
-void Gallery::layout_home(float top, float s) {
+float Gallery::layout_home(float top, float s) {
     const Theme& theme = themes_.theme();
     paragraph_.text = "这是一个 Fluent 风格的开源 C++ 控件库演示。";
     paragraph_.face = kFaceRegular;
@@ -459,18 +481,22 @@ void Gallery::layout_home(float top, float s) {
     note_.role = TextRole::Secondary;
     note_.wrap = true;
     note_.layout(text_, theme, s, page_x_, paragraph_.rect.bottom() + kSectionGap * s, content_w_);
+    return note_.rect.bottom();
 }
 
-void Gallery::layout_text_box(float top, float s) {
+float Gallery::layout_text_box(float top, float s) {
     VStack stack;
     stack.reset(page_x_, top, content_w_, kSectionGap * s);
+    float bottom = top;
     for (TextBox& box : boxes_) {
         box.measure(s);
         box.place(page_x_, stack.next(box.height));
+        bottom = box.field.bottom();
     }
+    return bottom;
 }
 
-void Gallery::layout_button(float top, float s) {
+float Gallery::layout_button(float top, float s) {
     const Theme& theme = themes_.theme();
     float y = top;
     for (int row = 0; row < 2; ++row) {
@@ -492,9 +518,10 @@ void Gallery::layout_button(float top, float s) {
     note_.role = TextRole::Secondary;
     note_.wrap = false;
     note_.layout(text_, theme, s, page_x_, y + kSectionGap * s, content_w_);
+    return note_.rect.bottom();
 }
 
-void Gallery::layout_dropdown(float top, float s) {
+float Gallery::layout_dropdown(float top, float s) {
     const Theme& theme = themes_.theme();
     const float gap = kSectionGap * s;
 
@@ -539,9 +566,10 @@ void Gallery::layout_dropdown(float top, float s) {
     footer_.wrap = false;
     footer_.layout(text_, theme, s, page_x_,
                    note_.rect.bottom() + 2.0f * (cell_h + gap) + kSectionGap * s, content_w_);
+    return footer_.rect.bottom();
 }
 
-void Gallery::layout_toggle(float top, float s) {
+float Gallery::layout_toggle(float top, float s) {
     const Theme& theme = themes_.theme();
     float y = top;
     for (ToggleSwitch& toggle : toggles_) {
@@ -551,9 +579,10 @@ void Gallery::layout_toggle(float top, float s) {
         toggle.place(page_x_, y, s);
         y += toggle.rect.h + kRowGap * s;
     }
+    return y;
 }
 
-void Gallery::layout_fonts(float top, float s) {
+float Gallery::layout_fonts(float top, float s) {
     const Theme& theme = themes_.theme();
     float y = top;
     for (int i = 0; i < kFontCardCount; ++i) {
@@ -565,6 +594,7 @@ void Gallery::layout_fonts(float top, float s) {
                                    font_meta_[index].rect.bottom() + 4.0f * s, 0.0f);
         y += (kFontCardHeight + kFontCardGap) * s;
     }
+    return y - kFontCardGap * s;
 }
 
 void Gallery::update_icon_filter() {
@@ -577,7 +607,7 @@ void Gallery::update_icon_filter() {
     }
 }
 
-void Gallery::layout_icons(float top, float s) {
+float Gallery::layout_icons(float top, float s) {
     const Theme& theme = themes_.theme();
 
     // 搜索框在视口上方，右侧图标为内嵌放大镜。
@@ -627,9 +657,10 @@ void Gallery::layout_icons(float top, float s) {
     note_.role = TextRole::Tertiary;
     note_.wrap = false;
     note_.layout(text_, theme, s, page_x_, view_top + 8.0f * s, 0.0f);
+    return icons_view_.rect.bottom();
 }
 
-void Gallery::layout_about(float top, float s) {
+float Gallery::layout_about(float top, float s) {
     const Theme& theme = themes_.theme();
     paragraph_.text =
         "AetherUI 是一个 MIT 协议、可商用的开源 UI 库，定位为 Linux 可用的 Fluent 风格控件库。";
@@ -645,6 +676,7 @@ void Gallery::layout_about(float top, float s) {
     note_.role = TextRole::Tertiary;
     note_.wrap = false;
     note_.layout(text_, theme, s, page_x_, paragraph_.rect.bottom() + kSectionGap * s, content_w_);
+    return note_.rect.bottom();
 }
 
 // ---------------------------------------------------------------- 绘制
@@ -663,8 +695,18 @@ void Gallery::draw(Surface& surface, double now) {
     const Rect content_area{nav_.rect.right(), title_bar_.bar.h, width_ - nav_.rect.right(),
                             height_ - title_bar_.bar.h};
     painter.set_clip(intersect(surface.bounds(), cover(content_area)));
-    draw_page(ctx);
+    if (page_ == Page::Icons) {
+        draw_page(ctx);
+    } else {
+        // 页面内容随滚动条平移，超出视口的部分裁掉。
+        const Recti page_clip = page_scroll_.begin_clip(ctx);
+        draw_page(ctx);
+        page_scroll_.end_clip(ctx, page_clip);
+    }
     dropdowns_group_.draw_panels(ctx);
+    if (page_ != Page::Icons) {
+        page_scroll_.draw_bar(ctx);
+    }
     painter.set_clip(surface.bounds());
 
     // 导航、标题栏在内容之上。
@@ -843,6 +885,14 @@ void Gallery::handle_event(const Event& event, Window& window, double now) {
         focus_.press(event);
     }
     focus_.handle_event(event, ui);
+
+    if (is_pointer_event(event) && page_ != Page::Icons) {
+        // 内容区滚动条先拿事件：滚轮被吃掉或正在拖动的滑块都要截住。
+        const bool used = page_scroll_.handle_event(event, ui);
+        if (used && (event.type == Event::Type::Wheel || page_scroll_.bar.dragging)) {
+            return;
+        }
+    }
 
     if (is_pointer_event(event)) {
         switch (page_) {

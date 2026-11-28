@@ -18,9 +18,10 @@
 namespace {
 
 /// 演示窗口的标题与图标：标题栏自绘 logo、任务栏图标都从这两项派生。
-/// 图标可填内置 Fluent 图标名（"SPARKLE"），也可填 SVG（"sparkle.svg"）。
+/// 图标可填 "AETHERUI"（品牌图标：强调色方块 + 白色星芒）、内置 Fluent 图标名
+/// （"SPARKLE"）或 SVG 文件（"sparkle.svg"）。
 constexpr const char* kAppTitle = "AetherUI Gallery";
-constexpr const char* kAppIcon = "SPARKLE";
+constexpr const char* kAppIcon = "AETHERUI";
 
 std::vector<std::string> font_search_dirs() {
     std::vector<std::string> dirs;

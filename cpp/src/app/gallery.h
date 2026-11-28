@@ -99,14 +99,15 @@ private:
 
     // ---- 布局 ----
     void layout(double now);
-    void layout_home(float top, float s);
-    void layout_text_box(float top, float s);
-    void layout_button(float top, float s);
-    void layout_dropdown(float top, float s);
-    void layout_toggle(float top, float s);
-    void layout_fonts(float top, float s);
-    void layout_icons(float top, float s);
-    void layout_about(float top, float s);
+    /// 各页面布局：返回内容底边（屏幕像素），用于给内容区滚动条算内容高度。
+    float layout_home(float top, float s);
+    float layout_text_box(float top, float s);
+    float layout_button(float top, float s);
+    float layout_dropdown(float top, float s);
+    float layout_toggle(float top, float s);
+    float layout_fonts(float top, float s);
+    float layout_icons(float top, float s);
+    float layout_about(float top, float s);
     /// 按搜索框内容重建 `icon_matches_`。
     void update_icon_filter();
 
@@ -149,6 +150,10 @@ private:
     std::string icon_filter_source_;
 
     ScrollView icons_view_;
+    /// 内容区滚动：除图标页（自己有视口）外的所有页面共用。
+    ScrollView page_scroll_;
+    /// 上一帧的内容高度，用来夹紧本帧滚动位置（避免重复排版）。
+    float page_content_h_ = 0.0f;
     std::vector<Card> font_cards_;
     std::vector<Label> font_meta_;
     std::vector<Label> font_sample_;
